@@ -373,6 +373,22 @@ async function main() {
   console.log(`Balance sources:    ${JSON.stringify(bySource)}`);
   const errSamples = [...new Set(nfts.map((n) => n.error).filter(Boolean))].slice(0, 5);
   if (errSamples.length) console.log(`Error examples:\n  - ${errSamples.join('\n  - ')}`);
+  // Data check: lets us verify new fields from the log alone
+  const statusCounts = {};
+  const traitTypes = new Set();
+  let withTraits = 0, withOwner = 0, tokenRows = 0, nftRows = 0;
+  const owners = new Set();
+  for (const n of nfts) {
+    if (Object.keys(n.traits || {}).length) { withTraits++; for (const k of Object.keys(n.traits)) traitTypes.add(k); }
+    if (n.owner) { withOwner++; owners.add(n.owner); }
+    nftRows += n.nfts.length;
+    for (const t of n.tokens) { tokenRows++; const k = String(t.status ?? 'none'); statusCounts[k] = (statusCounts[k] || 0) + 1; }
+  }
+  console.log('----- Data check -----');
+  console.log(`NFTs with traits:   ${withTraits} (trait types: ${[...traitTypes].join(', ') || 'none'})`);
+  console.log(`NFTs with owner:    ${withOwner} (distinct holders: ${owners.size})`);
+  console.log(`Token rows:         ${tokenRows}; by OpenSea status: ${JSON.stringify(statusCounts)}`);
+  console.log(`NFT rows held:      ${nftRows}`);
   console.log(`Elapsed: ${Math.round((Date.now() - START) / 1000)}s`);
 }
 
