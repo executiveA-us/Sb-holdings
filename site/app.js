@@ -179,8 +179,20 @@ function renderHolderNfts() {
         ]),
       ]),
     ]);
-    card.addEventListener('click', () => { closeHolder(); openPanel(n); });
+    card.addEventListener('click', () => openPanel(n));
     grid.append(card);
+  }
+}
+
+function renderHolderStats() {
+  const h = currentHolder;
+  const wallets = new Map();
+  for (const n of h.nfts) if (n.wallet && !wallets.has(n.wallet)) wallets.set(n.wallet, n);
+  const inside = [...wallets.values()].reduce((s, n) => s + (n.nfts || []).length, 0);
+  const stats = $('h-stats');
+  stats.replaceChildren();
+  for (const [label, val] of [['Stonk Brokers held', fmtNum(h.nfts.length, 0)], ['Total USD in wallets', fmtUsd(h.usd)], ['Total ETH', fmtNum(h.eth)], ['Other NFTs inside wallets', fmtNum(inside, 0)]]) {
+    stats.append(el('div', { cls: 'stat' }, [el('b', { text: val }), el('span', { text: label })]));
   }
 }
 
@@ -195,14 +207,7 @@ function openHolder(h) {
     try { await navigator.clipboard.writeText(h.owner); copy.textContent = 'Copied ✓'; } catch { copy.textContent = 'Copy failed'; }
     setTimeout(() => (copy.textContent = 'Copy'), 1500);
   };
-  const wallets = new Map();
-  for (const n of h.nfts) if (n.wallet && !wallets.has(n.wallet)) wallets.set(n.wallet, n);
-  const inside = [...wallets.values()].reduce((s, n) => s + (n.nfts || []).length, 0);
-  const stats = $('h-stats');
-  stats.replaceChildren();
-  for (const [label, val] of [['Stonk Brokers held', fmtNum(h.nfts.length, 0)], ['Total USD in wallets', fmtUsd(h.usd)], ['Total ETH', fmtNum(h.eth)], ['Other NFTs inside wallets', fmtNum(inside, 0)]]) {
-    stats.append(el('div', { cls: 'stat' }, [el('b', { text: val }), el('span', { text: label })]));
-  }
+  renderHolderStats();
   $('h-sort').value = 'usd';
   renderHolderNfts();
   $('hpanel').hidden = false;
@@ -210,7 +215,7 @@ function openHolder(h) {
   setHash(`#holder-${h.owner}`);
   $('h-close').focus();
 }
-function closeHolder() { $('hpanel').hidden = true; if ($('panel').hidden) document.body.style.overflow = ''; setHash(''); }
+function closeHolder() { $('hpanel').hidden = true; if ($('panel').hidden) { document.body.style.overflow = ''; setHash(''); } }
 
 // ---------- live refresh (browser -> public Blockscout API, no API key involved) ----------
 async function bsJson(path) {
@@ -268,6 +273,10 @@ async function refreshNft(n) {
   n.refreshedAt = new Date().toISOString();
   const partial = ok < 3 && !(addr.status === 'rejected' && toks.status === 'rejected' && nfts.status === 'rejected');
   renderStats(); renderGrid();
+  if (!$('hpanel').hidden && currentHolder) {
+    const fresh = buildHolders().find((x) => x.owner === currentHolder.owner);
+    if (fresh) { currentHolder = fresh; renderHolderStats(); renderHolderNfts(); }
+  }
   openPanel(n);
   $('p-refresh-status').textContent = `Refreshed ${new Date().toLocaleTimeString()}${partial ? ' (partly — some parts could not be loaded)' : ''}. Not saved; the next index run replaces it.`;
 }
@@ -293,9 +302,14 @@ function openPanel(n) {
     ob.textContent = short(ownerAddr);
     ob.onclick = () => {
       const h = buildHolders().find((x) => x.owner === ownerAddr);
-      if (h) { closePanel(); openHolder(h); }
+      if (!h) return;
+      if (!$('hpanel').hidden && currentHolder && currentHolder.owner === ownerAddr) { closePanel(); return; }
+      closePanel(); openHolder(h);
     };
   }
+  const back = $('p-back');
+  back.hidden = $('hpanel').hidden;
+  if (!back.hidden) back.onclick = closePanel;
   const rb = $('p-refresh');
   rb.hidden = !isAddr(n.wallet);
   rb.disabled = false;
@@ -344,7 +358,11 @@ function openPanel(n) {
   $('close').focus();
 }
 function setHash(h) { try { history.replaceState(null, '', h || location.pathname + location.search); } catch { /* ignore */ } }
-function closePanel() { $('panel').hidden = true; document.body.style.overflow = ''; setHash(''); }
+function closePanel() {
+  $('panel').hidden = true;
+  if (!$('hpanel').hidden && currentHolder) { setHash(`#holder-${currentHolder.owner}`); $('hpanel').focus?.(); }
+  else { document.body.style.overflow = ''; setHash(''); }
+}
 
 function showEmpty(msg) { const e = $('empty'); e.textContent = msg; e.hidden = false; }
 
@@ -381,7 +399,7 @@ async function main() {
   $('tab-nfts').addEventListener('click', () => setView('nfts'));
   $('tab-holders').addEventListener('click', () => setView('holders'));
   $('panel').addEventListener('click', (e) => { if (e.target === $('panel')) closePanel(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (!$('hpanel').hidden && $('panel').hidden) closeHolder(); else closePanel(); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (!$('panel').hidden) closePanel(); else if (!$('hpanel').hidden) closeHolder(); } });
   $('q').addEventListener('input', (e) => { state.q = e.target.value; rerender(); });
   $('sort').addEventListener('change', (e) => { state.sort = e.target.value; rerender(); });
   $('holding').addEventListener('change', (e) => { state.holding = e.target.checked; rerender(); });
