@@ -26,6 +26,7 @@ const MAX_RUNTIME_MS = Number(env('MAX_RUNTIME_MIN', '90')) * 60_000;
 const MAX_PAGES = Number(env('MAX_PAGES', '200'));
 const CACHE_FILE = path.join(ROOT, env('CACHE_FILE', '.cache/wallet-map.json'));
 const OUT_FILE = path.join(ROOT, env('OUT_FILE', 'site/data/wallets.json'));
+const TRAITS_ONLY = /^(1|true|yes)$/i.test(env('TRAITS_ONLY', ''));
 const START = Date.now();
 
 if (!API_KEY) { console.error('OPENSEA_API_KEY is not set'); process.exit(1); }
@@ -265,7 +266,8 @@ async function main() {
 
   const results = new Map();
   let scanned = 0;
-  await pool(wallets, async (w) => {
+  if (TRAITS_ONLY) console.log('TRAITS_ONLY set: skipping NFT/token/ETH balance scans.');
+  await pool(TRAITS_ONLY ? [] : wallets, async (w) => {
     if (timeLeft() < 30_000) { results.set(w, { ethBalance: 0, tokens: [], nfts: [], source: 'none', errors: ['skipped: time budget exhausted'] }); return; }
     try { results.set(w, await scanWallet(w)); }
     catch (e) { results.set(w, { ethBalance: 0, tokens: [], nfts: [], source: 'none', errors: [e.message] }); }

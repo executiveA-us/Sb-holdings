@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '*/30 * * * *'
   workflow_dispatch:
+    inputs:
+      traits_only:
+        description: 'Only read each NFT wallet trait (skip balance scans)'
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -48,6 +53,7 @@ jobs:
           # Optional overrides (repo Settings → Variables → Actions):
           CONTRACT: ${{ vars.CONTRACT }}
           WALLET_TRAIT: ${{ vars.WALLET_TRAIT }}
+          TRAITS_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.traits_only || vars.TRAITS_ONLY }}
         run: node index.mjs
 
       - name: Save cache
