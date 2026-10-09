@@ -35,6 +35,7 @@ const timeLeft = () => MAX_RUNTIME_MS - (Date.now() - START);
 
 // ---- HTTP: spaced requests, retry/backoff on 429/5xx ----
 let nextSlot = 0;
+let retryCount = 0;
 async function gate(minGapMs) {
   const now = Date.now();
   const at = Math.max(now, nextSlot);
@@ -51,7 +52,7 @@ async function getJson(url, { opensea = false, retries = 6 } = {}) {
   if (opensea) headers['x-api-key'] = API_KEY;
   const safeUrl = url.replace(/^https:\/\/[^/]+/, '');
   for (let attempt = 0; ; attempt++) {
-    if (opensea) await gate(Number(env('MIN_GAP_MS', '300')));
+    if (opensea) await gate(Number(env('MIN_GAP_MS', '400')));
     let res;
     try {
       res = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
@@ -63,7 +64,12 @@ async function getJson(url, { opensea = false, retries = 6 } = {}) {
     if (res.ok) return res.json();
     if ((res.status === 429 || res.status >= 500) && attempt < retries) {
       const ra = Number(res.headers.get('retry-after'));
-      await sleep(Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 60_000) : backoff(attempt));
+      const wait = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 60_000) : backoff(attempt);
+      retryCount++;
+      if (retryCount <= 5 || retryCount % 25 === 0) {
+        console.warn(`  [retry #${retryCount}] HTTP ${res.status} on ${safeUrl.split('?')[0]} — waiting ${Math.round(wait / 1000)}s (attempt ${attempt + 1}/${retries})`);
+      }
+      await sleep(wait);
       continue;
     }
     throw new HttpError(res.status, safeUrl);
@@ -224,22 +230,32 @@ async function main() {
   const toFetch = [...fresh, ...stale];
   console.log(`Fetching traits: ${fresh.length} new + ${stale.length} re-checks`);
 
-  let fetched = 0;
+  let fetched = 0, failed = 0, consecutiveFails = 0, aborted = false;
   await pool(toFetch, async (id) => {
-    if (timeLeft() < 120_000) return; // leave time to scan wallets & write output
+    if (aborted || timeLeft() < 120_000) return; // leave time to scan wallets & write output
     try {
       const s = await fetchSingle(id);
-      fetched++;
+      fetched++; consecutiveFails = 0;
       if (!s.wallet) {
         noWallet.add(id);
-        if (sampled.size && !sampled.has('no-wallet-warning')) {
+        if (!sampled.has('no-wallet-warning')) {
           sampled.add('no-wallet-warning');
           console.warn(`Token ${id}: no wallet trait found (${s.traitCount} traits). Check WALLET_TRAIT / field mapping.`);
         }
       }
       cache.tokens[id] = { wallet: s.wallet, owner: s.owner, checked: Date.now() };
-    } catch (e) { fetchErrors[id] = e.message; }
-    if (fetched % 100 === 0 && fetched) { console.log(`  traits fetched: ${fetched}/${toFetch.length}`); await saveCache(cache); }
+    } catch (e) {
+      failed++; consecutiveFails++;
+      fetchErrors[id] = e.message;
+      if (failed <= 5) console.warn(`  trait fetch failed for ${id}: ${e.message}`);
+      if (consecutiveFails >= 15) {
+        aborted = true;
+        console.error('15 trait fetches failed in a row (likely rate limit / quota). Stopping trait fetching; progress is cached.');
+      }
+    }
+    const done = fetched + failed;
+    if (done % 25 === 0) console.log(`  traits: ${fetched} ok, ${failed} failed, ${done}/${toFetch.length} processed`);
+    if (done % 100 === 0) await saveCache(cache);
   });
   await saveCache(cache);
 
