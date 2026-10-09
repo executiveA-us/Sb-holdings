@@ -31,6 +31,9 @@ header. It is never logged or written to the site. All on-chain/metadata strings
 - ETH comes from OpenSea's token list (native ETH appears as `ETH`); no entry means 0 ETH. Blockscout is used only if OpenSea's token call fails for a wallet.
 - The owner (holder) of each NFT is refreshed gradually: each run re-checks `RECHECK_PER_RUN` (default 400) NFTs, owner-less and oldest first.
 
+
+**Site-only changes:** run the workflow with *reuse_data* ticked to redeploy the site in about a minute using the currently published `wallets.json` (no indexing, no OpenSea calls).
+
 ## Setup
 
 1. Repo **Settings → Secrets and variables → Actions**: secret `OPENSEA_API_KEY` (already set).

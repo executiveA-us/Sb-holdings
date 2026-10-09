@@ -78,7 +78,16 @@
       <button id="h-copy" class="btn" type="button">Copy</button>
       <a id="h-link" class="btn" target="_blank" rel="noopener noreferrer">Explorer ↗</a>
     </div>
-    <p class="muted" id="h-meta"></p>
+    <div class="stats" id="h-stats"></div>
+    <div class="addr-row">
+      <label class="muted" for="h-sort">Sort their NFTs:</label>
+      <select id="h-sort" aria-label="Sort this holder's NFTs">
+        <option value="usd">USD value: high → low</option>
+        <option value="usdasc">USD value: low → high</option>
+        <option value="eth">ETH: high → low</option>
+        <option value="id">Token #</option>
+      </select>
+    </div>
     <div class="grid" id="h-nfts"></div>
   </div>
 </aside>

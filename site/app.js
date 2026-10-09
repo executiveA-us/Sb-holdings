@@ -158,8 +158,35 @@ function renderHolders() {
   grid.append(frag);
 }
 
+let currentHolder = null;
+function renderHolderNfts() {
+  const h = currentHolder;
+  if (!h) return;
+  const keys = { usd: (n) => -usdOf(n), usdasc: (n) => usdOf(n), eth: (n) => -(n.ethBalance || 0), id: (n) => Number(n.tokenId) };
+  const key = keys[$('h-sort').value] || keys.usd;
+  const grid = $('h-nfts');
+  grid.replaceChildren();
+  for (const n of h.nfts.slice().sort((a, b) => key(a) - key(b) || Number(a.tokenId) - Number(b.tokenId))) {
+    const card = el('button', { cls: 'card', attrs: { type: 'button' } }, [
+      imageBox(n.image, toStr(n.name)),
+      el('div', { cls: 'body' }, [
+        el('div', { cls: 'name', text: toStr(n.name) || `#${toStr(n.tokenId)}` }),
+        el('div', { cls: 'addr', text: n.wallet ? short(n.wallet) : 'no wallet' }),
+        el('div', { cls: 'chips' }, [
+          el('span', { cls: 'chip', text: fmtUsd(usdOf(n)) }),
+          el('span', { cls: 'chip', text: `${fmtNum(n.ethBalance || 0)} ETH` }),
+          el('span', { cls: 'chip', text: `${(n.nfts || []).length} NFTs` }),
+        ]),
+      ]),
+    ]);
+    card.addEventListener('click', () => { closeHolder(); openPanel(n); });
+    grid.append(card);
+  }
+}
+
 function openHolder(h) {
-  $('h-title').textContent = `${h.nfts.length} Stonk Broker${h.nfts.length === 1 ? '' : 's'}`;
+  currentHolder = h;
+  $('h-title').textContent = `Holder ${short(h.owner)}`;
   $('h-addr').textContent = h.owner;
   $('h-link').href = `${EXPLORER}/address/${h.owner}`;
   const copy = $('h-copy');
@@ -168,21 +195,16 @@ function openHolder(h) {
     try { await navigator.clipboard.writeText(h.owner); copy.textContent = 'Copied ✓'; } catch { copy.textContent = 'Copy failed'; }
     setTimeout(() => (copy.textContent = 'Copy'), 1500);
   };
-  $('h-meta').textContent = `Combined wallet contents: ${fmtNum(h.eth)} ETH · ${fmtUsd(h.usd)}`;
-  const grid = $('h-nfts');
-  grid.replaceChildren();
-  for (const n of h.nfts.slice().sort((a, b) => Number(a.tokenId) - Number(b.tokenId))) {
-    const card = el('button', { cls: 'card', attrs: { type: 'button' } }, [
-      imageBox(n.image, toStr(n.name)),
-      el('div', { cls: 'body' }, [
-        el('div', { cls: 'name', text: toStr(n.name) || `#${toStr(n.tokenId)}` }),
-        el('div', { cls: 'addr', text: n.wallet ? short(n.wallet) : 'no wallet' }),
-        el('div', { cls: 'chips' }, [el('span', { cls: 'chip', text: `${fmtNum(n.ethBalance || 0)} ETH` }), el('span', { cls: 'chip', text: fmtUsd(usdOf(n)) })]),
-      ]),
-    ]);
-    card.addEventListener('click', () => { closeHolder(); openPanel(n); });
-    grid.append(card);
+  const wallets = new Map();
+  for (const n of h.nfts) if (n.wallet && !wallets.has(n.wallet)) wallets.set(n.wallet, n);
+  const inside = [...wallets.values()].reduce((s, n) => s + (n.nfts || []).length, 0);
+  const stats = $('h-stats');
+  stats.replaceChildren();
+  for (const [label, val] of [['Stonk Brokers held', fmtNum(h.nfts.length, 0)], ['Total USD in wallets', fmtUsd(h.usd)], ['Total ETH', fmtNum(h.eth)], ['Other NFTs inside wallets', fmtNum(inside, 0)]]) {
+    stats.append(el('div', { cls: 'stat' }, [el('b', { text: val }), el('span', { text: label })]));
   }
+  $('h-sort').value = 'usd';
+  renderHolderNfts();
   $('hpanel').hidden = false;
   document.body.style.overflow = 'hidden';
   setHash(`#holder-${h.owner}`);
@@ -342,6 +364,7 @@ async function main() {
   initTheme();
   $('close').addEventListener('click', closePanel);
   $('h-close').addEventListener('click', closeHolder);
+  $('h-sort').addEventListener('change', renderHolderNfts);
   $('hpanel').addEventListener('click', (e) => { if (e.target === $('hpanel')) closeHolder(); });
   const setView = (v) => {
     state.view = v;

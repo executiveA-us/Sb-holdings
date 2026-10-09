@@ -9,6 +9,10 @@ on:
         description: 'Only read each NFT wallet trait (skip balance scans)'
         type: boolean
         default: true
+      reuse_data:
+        description: 'Site-only redeploy: reuse the currently published data and skip indexing'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,7 +37,16 @@ jobs:
         with:
           node-version: 20
 
+      - name: Reuse published data (site-only redeploy)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.reuse_data }}
+        run: |
+          mkdir -p site/data
+          curl -fsS --retry 3 -o site/data/wallets.json \
+            "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data/wallets.json"
+          test -s site/data/wallets.json
+
       - name: Restore token→wallet cache
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.reuse_data) }}
         id: cache
         uses: actions/cache/restore@v4
         with:
@@ -43,10 +56,12 @@ jobs:
             wallet-map-
 
       - name: Test parsers
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.reuse_data) }}
         working-directory: indexer
         run: node --test
 
       - name: Run indexer
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.reuse_data) }}
         working-directory: indexer
         env:
           OPENSEA_API_KEY: ${{ secrets.OPENSEA_API_KEY }}
@@ -57,7 +72,7 @@ jobs:
         run: node index.mjs
 
       - name: Save cache
-        if: always()
+        if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.reuse_data) }}
         uses: actions/cache/save@v4
         with:
           path: .cache/wallet-map.json
