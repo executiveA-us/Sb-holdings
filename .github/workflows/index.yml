@@ -1,0 +1,67 @@
+name: Index wallets & deploy site
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Restore token→wallet cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/wallet-map.json
+          key: wallet-map-${{ github.run_id }}
+          restore-keys: |
+            wallet-map-
+
+      - name: Test parsers
+        working-directory: indexer
+        run: node --test
+
+      - name: Run indexer
+        working-directory: indexer
+        env:
+          OPENSEA_API_KEY: ${{ secrets.OPENSEA_API_KEY }}
+          # Optional overrides (repo Settings → Variables → Actions):
+          CONTRACT: ${{ vars.CONTRACT }}
+          WALLET_TRAIT: ${{ vars.WALLET_TRAIT }}
+        run: node index.mjs
+
+      - name: Save cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/wallet-map.json
+          key: wallet-map-${{ github.run_id }}
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

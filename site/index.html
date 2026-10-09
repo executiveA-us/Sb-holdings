@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src https: data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>NFT Wallets</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1 id="title">NFT Wallets</h1>
+    <p class="muted" id="updated">Loading…</p>
+  </div>
+  <button id="theme" class="btn" type="button" aria-label="Toggle theme">◐</button>
+</header>
+
+<main>
+  <section class="stats" id="stats" aria-label="Summary"></section>
+
+  <section class="controls">
+    <input id="q" type="search" placeholder="Search token id, wallet, or name" aria-label="Search">
+    <select id="sort" aria-label="Sort">
+      <option value="id">Sort: token id</option>
+      <option value="eth">Sort: ETH</option>
+      <option value="usd">Sort: USD value</option>
+      <option value="nfts">Sort: NFT count</option>
+    </select>
+    <label class="check"><input id="holding" type="checkbox"> Only wallets holding something</label>
+  </section>
+
+  <p class="muted" id="count"></p>
+  <div id="empty" class="notice" hidden></div>
+  <section class="grid" id="grid"></section>
+</main>
+
+<aside id="panel" class="panel" hidden aria-modal="true" role="dialog" aria-labelledby="p-title">
+  <div class="panel-inner">
+    <button id="close" class="btn close" type="button" aria-label="Close">✕</button>
+    <h2 id="p-title"></h2>
+    <div class="addr-row">
+      <code id="p-addr"></code>
+      <button id="p-copy" class="btn" type="button">Copy</button>
+      <a id="p-link" class="btn" target="_blank" rel="noopener noreferrer">Explorer ↗</a>
+    </div>
+    <p class="muted" id="p-meta"></p>
+    <p class="notice warn">Anyone can send items to these wallets. Names and metadata below come from third parties and are unverified — treat unfamiliar tokens and NFTs with caution.</p>
+    <h3>Token balances</h3>
+    <div class="table-wrap"><table id="p-tokens"></table></div>
+    <h3>NFTs held <span class="muted" id="p-nft-count"></span></h3>
+    <div class="grid small" id="p-nfts"></div>
+  </div>
+</aside>
+
+<script src="app.js"></script>
+</body>
+</html>

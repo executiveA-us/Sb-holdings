@@ -1,0 +1,10 @@
+{
+  "name": "sb-holdings-indexer",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node index.mjs",
+    "test": "node --test"
+  }
+}
