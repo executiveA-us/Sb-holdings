@@ -2,7 +2,7 @@ name: Index wallets & deploy site
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '17 */6 * * *'
   workflow_dispatch:
     inputs:
       traits_only:

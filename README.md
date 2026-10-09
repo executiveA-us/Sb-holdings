@@ -8,7 +8,7 @@ Default collection: `0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0` on Robinhood Ch
 
 ## How it works
 
-1. A GitHub Action (`.github/workflows/index.yml`) runs every 30 minutes and on demand.
+1. A GitHub Action (`.github/workflows/index.yml`) runs every 6 hours and on demand. A full scan of ~4,400 wallets takes about an hour, so frequent schedules would just overlap; use the site's per-NFT refresh for anything you want to check right now.
 2. `indexer/index.mjs` (Node 20, no dependencies):
    - lists all NFTs in the contract via the OpenSea API,
    - reads each NFT's traits and takes the first trait whose value is a `0x` address as its wallet
@@ -22,6 +22,14 @@ Default collection: `0x539cdd042c2f3d93ebc5be7dfff0c79f3b4fabf0` on Robinhood Ch
 The `OPENSEA_API_KEY` secret is only read inside the indexer step in Actions and sent as a request
 header. It is never logged or written to the site. All on-chain/metadata strings are rendered with
 `textContent`, and the page has a strict Content-Security-Policy.
+
+## Using the site
+
+- **NFTs** tab: one card per NFT with its wallet. **Holders** tab: groups NFTs by the address that owns them.
+- Click a card for the wallet's ETH, token balances and NFTs. Links like `…/#nft-123` and `…/#holder-0x…` can be shared.
+- **↻ Refresh from explorer** re-reads that one wallet live, straight from the public Blockscout API in the visitor's browser (no API key involved). It is not saved: the next index run replaces it. If the explorer rate-limits or blocks browser requests, the button says so.
+- ETH comes from OpenSea's token list (native ETH appears as `ETH`); no entry means 0 ETH. Blockscout is used only if OpenSea's token call fails for a wallet.
+- The owner (holder) of each NFT is refreshed gradually: each run re-checks `RECHECK_PER_RUN` (default 400) NFTs, owner-less and oldest first.
 
 ## Setup
 

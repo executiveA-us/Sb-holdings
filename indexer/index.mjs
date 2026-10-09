@@ -21,7 +21,7 @@ const API_KEY = env('OPENSEA_API_KEY', '');
 const OS = 'https://api.opensea.io';
 const BS = env('BLOCKSCOUT_URL', 'https://robinhoodchain.blockscout.com').replace(/\/$/, '');
 const CONCURRENCY = Math.min(3, Math.max(1, Number(env('CONCURRENCY', '3'))));
-const RECHECK = Number(env('RECHECK_PER_RUN', '60'));
+const RECHECK = Number(env('RECHECK_PER_RUN', '400'));
 const MAX_RUNTIME_MS = Number(env('MAX_RUNTIME_MIN', '90')) * 60_000;
 const MAX_PAGES = Number(env('MAX_PAGES', '200'));
 const CACHE_FILE = path.join(ROOT, env('CACHE_FILE', '.cache/wallet-map.json'));
@@ -144,21 +144,14 @@ async function fetchSingle(tokenId) {
   const url = `${OS}/api/v2/chain/${CHAIN}/contract/${CONTRACT}/nfts/${encodeURIComponent(tokenId)}`;
   const body = await getJson(url, { opensea: true });
   sample('single NFT', body, ['nft']);
+  if (!sampled.has('owners')) {
+    sampled.add('owners');
+    console.log(`[sample] owner fields: owners=${shortJson(body?.nft?.owners, 400)} owner=${shortJson(body?.nft?.owner, 200)}`);
+  }
   return parseSingleNft(body, WALLET_TRAIT);
 }
 
 // ---- per-wallet scanning ----
-const RPC_URL = env('RPC_URL', '');
-async function rpcBalance(wallet) {
-  if (!RPC_URL) return null;
-  const res = await fetch(RPC_URL, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [wallet, 'latest'] }),
-    signal: AbortSignal.timeout(20_000),
-  });
-  const j = await res.json();
-  return j?.result ? Number(BigInt(j.result)) / 1e18 : null;
-}
 
 let tokensEndpointFailures = 0;
 
@@ -190,25 +183,9 @@ async function scanWallet(wallet) {
     r.nfts = await paged(`${OS}/api/v2/chain/${CHAIN}/account/${wallet}/nfts`, 'next', 'account NFTs', ['nfts'], parseHeldNft);
   } catch (e) { r.errors.push(`nfts: ${e.message}`); }
 
-  // Native ETH (Blockscout) — also yields an ETH/USD rate
-  let ethRate = null;
-  try {
-    const body = await getJson(`${BS}/api/v2/addresses/${wallet}`);
-    sample('blockscout address', body);
-    const p = parseBlockscoutEth(body);
-    r.ethBalance = p.eth; ethRate = p.rate;
-  } catch (e) {
-    // Unknown/never-used addresses 404 on Blockscout: treat as empty.
-    if (e.status === 404) r.ethBalance = 0;
-    else {
-      const rpc = await rpcBalance(wallet).catch(() => null);
-      if (rpc !== null) r.ethBalance = rpc; else r.errors.push(`eth: ${e.message}`);
-      r.ethFromBlockscoutFailed = rpc === null;
-    }
-  }
-
-  // Token balances: OpenSea first, Blockscout fallback
+  // Token balances: OpenSea first (it also lists native ETH); Blockscout only if OpenSea fails.
   let done = false;
+  let ethRate = null;
   if (tokensEndpointFailures < 5) {
     try {
       const toks = await paged(`${OS}/api/v2/account/${wallet}/tokens?chains=${CHAIN}`, 'cursor', 'account tokens', ['token_balances', 'tokens', 'results'], parseOpenSeaToken);
@@ -222,7 +199,24 @@ async function scanWallet(wallet) {
       if (tokensEndpointFailures === 5) console.warn('OpenSea tokens endpoint failed 5 times in a row; using Blockscout only from now on.');
     }
   }
-  if (!done) {
+  if (done) {
+    // Native ETH shows up in the token list as symbol "ETH": move it to the ETH balance. No entry => 0 ETH.
+    const i = r.tokens.findIndex((t) => t.symbol === 'ETH');
+    if (i >= 0) {
+      const [native] = r.tokens.splice(i, 1);
+      r.ethBalance = native.quantity;
+      ethRate = native.usd !== null && native.quantity ? native.usd / native.quantity : null;
+    }
+  } else {
+    // Fallback: Blockscout for ETH and ERC-20s
+    try {
+      const body = await getJson(`${BS}/api/v2/addresses/${wallet}`);
+      sample('blockscout address', body);
+      const p = parseBlockscoutEth(body);
+      r.ethBalance = p.eth; ethRate = p.rate;
+    } catch (e) {
+      if (e.status !== 404) r.errors.push(`eth: ${e.message}`);
+    }
     try {
       r.tokens = await blockscoutTokens(wallet);
       r.source = 'blockscout';
@@ -232,17 +226,6 @@ async function scanWallet(wallet) {
       else r.errors.push(`blockscout tokens: ${e.message}`);
     }
   }
-
-  // If Blockscout/RPC failed, OpenSea may list native ETH among the tokens: use it for the balance.
-  if (r.ethFromBlockscoutFailed) {
-    const i = r.tokens.findIndex((t) => (!t.address || /^0x0{40}$/i.test(t.address)) && /^eth$/i.test(t.symbol || ''));
-    if (i >= 0) {
-      const [native] = r.tokens.splice(i, 1);
-      r.ethBalance = native.quantity; ethRate = native.usd !== null && native.quantity ? native.usd / native.quantity : null;
-      r.errors = r.errors.filter((m) => !m.startsWith('eth:'));
-    }
-  }
-  delete r.ethFromBlockscoutFailed;
 
   r.ethUsd = ethRate !== null ? r.ethBalance * ethRate : null;
   return r;
@@ -263,9 +246,10 @@ async function main() {
 
   // New tokens + a rotating slice of the oldest-checked cached ones
   const fresh = listed.filter((n) => !cache.tokens[n.tokenId]).map((n) => n.tokenId);
+  const rank = (id) => (cache.tokens[id].owner ? cache.tokens[id].checked || 0 : -1); // owner-less first
   const stale = listed
     .filter((n) => cache.tokens[n.tokenId])
-    .sort((a, b) => (cache.tokens[a.tokenId].checked || 0) - (cache.tokens[b.tokenId].checked || 0))
+    .sort((a, b) => rank(a.tokenId) - rank(b.tokenId))
     .slice(0, RECHECK).map((n) => n.tokenId);
   const toFetch = [...fresh, ...stale];
   console.log(`Fetching traits: ${fresh.length} new + ${stale.length} re-checks`);

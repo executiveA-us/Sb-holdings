@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src https: data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src https: data:; connect-src 'self' https://robinhoodchain.blockscout.com; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title>NFT Wallets</title>
 <link rel="stylesheet" href="style.css">
@@ -18,10 +18,16 @@
 </header>
 
 <main>
+  <p class="intro" id="intro">Every Stonk Broker NFT has its own wallet. Browse the wallets and see what each one holds, or switch to <b>Holders</b> to see who owns which NFTs. The numbers are a snapshot from the last scan — open any NFT and press <b>↻ Refresh</b> to check its wallet live.</p>
   <section class="stats" id="stats" aria-label="Summary"></section>
 
+  <nav class="tabs" aria-label="View">
+    <button id="tab-nfts" class="tab active" type="button">NFTs</button>
+    <button id="tab-holders" class="tab" type="button">Holders</button>
+  </nav>
+
   <section class="controls">
-    <input id="q" type="search" placeholder="Search token id, wallet, or name" aria-label="Search">
+    <input id="q" type="search" placeholder="Search by token #, wallet address, holder address or name" aria-label="Search">
     <select id="sort" aria-label="Sort">
       <option value="id">Sort: token id</option>
       <option value="eth">Sort: ETH</option>
@@ -29,12 +35,15 @@
       <option value="nfts">Sort: NFT count</option>
     </select>
     <label class="check"><input id="holding" type="checkbox"> Only wallets holding something</label>
+    <button id="reset" class="btn" type="button" hidden>Clear filters</button>
   </section>
 
   <p class="muted" id="count"></p>
   <div id="empty" class="notice" hidden></div>
   <section class="grid" id="grid"></section>
+  <div class="more"><button id="more" class="btn" type="button" hidden>Show more</button></div>
 </main>
+<footer class="foot">Anyone can send tokens or NFTs to these wallets, so unfamiliar items are unverified — don't trust names, images or links you don't recognise. Balances and USD values are informational only, may be out of date, and are not financial advice.</footer>
 
 <aside id="panel" class="panel" hidden aria-modal="true" role="dialog" aria-labelledby="p-title">
   <div class="panel-inner">
@@ -46,11 +55,31 @@
       <a id="p-link" class="btn" target="_blank" rel="noopener noreferrer">Explorer ↗</a>
     </div>
     <p class="muted" id="p-meta"></p>
+    <div class="addr-row">
+      <span class="muted">Holder:</span>
+      <button id="p-owner" class="btn" type="button"></button>
+      <button id="p-refresh" class="btn" type="button">↻ Refresh from explorer</button>
+      <span class="muted" id="p-refresh-status" role="status"></span>
+    </div>
     <p class="notice warn">Anyone can send items to these wallets. Names and metadata below come from third parties and are unverified — treat unfamiliar tokens and NFTs with caution.</p>
     <h3>Token balances</h3>
     <div class="table-wrap"><table id="p-tokens"></table></div>
     <h3>NFTs held <span class="muted" id="p-nft-count"></span></h3>
     <div class="grid small" id="p-nfts"></div>
+  </div>
+</aside>
+
+<aside id="hpanel" class="panel" hidden aria-modal="true" role="dialog" aria-labelledby="h-title">
+  <div class="panel-inner">
+    <button id="h-close" class="btn close" type="button" aria-label="Close">✕</button>
+    <h2 id="h-title"></h2>
+    <div class="addr-row">
+      <code id="h-addr"></code>
+      <button id="h-copy" class="btn" type="button">Copy</button>
+      <a id="h-link" class="btn" target="_blank" rel="noopener noreferrer">Explorer ↗</a>
+    </div>
+    <p class="muted" id="h-meta"></p>
+    <div class="grid" id="h-nfts"></div>
   </div>
 </aside>
 
