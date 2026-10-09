@@ -59,7 +59,8 @@ function visible() {
   });
   const key = { eth: (n) => n.ethBalance || 0, usd: usdOf, nfts: (n) => (n.nfts || []).length }[state.sort];
   list = list.slice();
-  if (key) list.sort((a, b) => key(b) - key(a));
+  if (state.sort === 'nfts') list.sort((a, b) => (b.nfts || []).length - (a.nfts || []).length || usdOf(b) - usdOf(a));
+  else if (key) list.sort((a, b) => key(b) - key(a));
   else list.sort((a, b) => Number(a.tokenId) - Number(b.tokenId) || toStr(a.tokenId).localeCompare(toStr(b.tokenId)));
   return list;
 }
@@ -127,7 +128,8 @@ function visibleHolders() {
     return h.owner.includes(q) || h.nfts.some((n) => toStr(n.tokenId).toLowerCase() === q || toStr(n.name).toLowerCase().includes(q) || toStr(n.wallet).toLowerCase().includes(q));
   });
   const key = { eth: (h) => h.eth, usd: (h) => h.usd, nfts: (h) => h.nfts.length, count: (h) => h.nfts.length }[state.sort] || ((h) => h.nfts.length);
-  list.sort((a, b) => key(b) - key(a) || a.owner.localeCompare(b.owner));
+  const tie = state.sort === 'eth' || state.sort === 'usd' ? 0 : 1;
+  list.sort((a, b) => key(b) - key(a) || (tie ? b.usd - a.usd : 0) || a.owner.localeCompare(b.owner));
   return list;
 }
 
@@ -163,10 +165,13 @@ function renderHolderNfts() {
   const h = currentHolder;
   if (!h) return;
   const keys = { usd: (n) => -usdOf(n), usdasc: (n) => usdOf(n), eth: (n) => -(n.ethBalance || 0), id: (n) => Number(n.tokenId) };
-  const key = keys[$('h-sort').value] || keys.usd;
+  const key = keys[$('h-sort').value] || keys.nfts;
   const grid = $('h-nfts');
   grid.replaceChildren();
-  for (const n of h.nfts.slice().sort((a, b) => key(a) - key(b) || Number(a.tokenId) - Number(b.tokenId))) {
+  const mode = $('h-sort').value;
+  const byNfts = (a, b) => (b.nfts || []).length - (a.nfts || []).length || usdOf(b) - usdOf(a);
+  const cmp = mode === 'nfts' ? byNfts : (a, b) => key(a) - key(b);
+  for (const n of h.nfts.slice().sort((a, b) => cmp(a, b) || Number(a.tokenId) - Number(b.tokenId))) {
     const card = el('button', { cls: 'card', attrs: { type: 'button' } }, [
       imageBox(n.image, toStr(n.name)),
       el('div', { cls: 'body' }, [
@@ -208,7 +213,7 @@ function openHolder(h) {
     setTimeout(() => (copy.textContent = 'Copy'), 1500);
   };
   renderHolderStats();
-  $('h-sort').value = 'usd';
+  $('h-sort').value = 'nfts';
   renderHolderNfts();
   $('hpanel').hidden = false;
   document.body.style.overflow = 'hidden';
