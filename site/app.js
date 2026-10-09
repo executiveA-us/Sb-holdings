@@ -3,8 +3,43 @@
 
 const EXPLORER = 'https://robinhoodchain.blockscout.com';
 const $ = (id) => document.getElementById(id);
-const state = { data: null, nfts: [], q: '', sort: 'id', holding: false, view: 'nfts', limit: 60 };
+const state = { data: null, nfts: [], q: '', sort: 'id', holding: false, view: 'nfts', limit: 60, traits: {}, noStar: false };
 const PAGE = 60;
+const traitsActive = () => Object.keys(state.traits).length;
+const matchesTraits = (n) => Object.entries(state.traits).every(([k, v]) => n.traits && n.traits[k] === v);
+
+function buildTraitUI() {
+  const idx = new Map();
+  for (const n of state.nfts) {
+    for (const [k, v] of Object.entries(n.traits || {})) {
+      if (!idx.has(k)) idx.set(k, new Map());
+      idx.get(k).set(v, (idx.get(k).get(v) || 0) + 1);
+    }
+  }
+  const box = $('traits-box'), grid = $('traits-grid');
+  box.hidden = idx.size === 0;
+  grid.replaceChildren();
+  for (const [type, vals] of [...idx.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const sel = el('select', { attrs: { 'aria-label': type, 'data-trait': type } }, [el('option', { text: 'Any', attrs: { value: '' } })]);
+    for (const [v, c] of [...vals.entries()].sort((a, b) => a[0].localeCompare(b[0]))) sel.append(el('option', { text: `${v} (${c})`, attrs: { value: v } }));
+    sel.value = state.traits[type] || '';
+    sel.addEventListener('change', () => {
+      if (sel.value) state.traits[type] = sel.value; else delete state.traits[type];
+      updateTraitSummary(); rerender();
+    });
+    grid.append(el('label', {}, [el('span', { text: type }), sel]));
+  }
+  updateTraitSummary();
+}
+function updateTraitSummary() {
+  const n = traitsActive();
+  $('traits-sum').textContent = n ? `Filter by traits (${n} active)` : 'Filter by traits';
+}
+function clearTraits() {
+  state.traits = {};
+  for (const sel of $('traits-grid').querySelectorAll('select')) sel.value = '';
+  updateTraitSummary();
+}
 
 function el(tag, opts = {}, children = []) {
   const n = document.createElement(tag);
@@ -22,7 +57,8 @@ const safeImg = (u) => (typeof u === 'string' && /^https:\/\//i.test(u) ? u : nu
 const isAddr = (a) => typeof a === 'string' && /^0x[0-9a-fA-F]{40}$/.test(a);
 const toStr = (v) => (v === null || v === undefined ? '' : String(v));
 
-const usdOf = (n) => (n.tokens || []).reduce((s, t) => s + (Number.isFinite(t.usd) ? t.usd : 0), 0) + (Number.isFinite(n.ethUsd) ? n.ethUsd : 0);
+const isUncertain = (t) => !!t && t.status !== null && t.status !== undefined && String(t.status).toUpperCase() !== 'OK';
+const usdOf = (n) => (n.tokens || []).reduce((s, t) => s + (Number.isFinite(t.usd) && !(state.noStar && isUncertain(t)) ? t.usd : 0), 0) + (Number.isFinite(n.ethUsd) ? n.ethUsd : 0);
 const holds = (n) => (n.ethBalance || 0) > 0 || (n.tokens || []).length > 0 || (n.nfts || []).length > 0;
 
 function imageBox(url, alt) {
@@ -54,6 +90,7 @@ function visible() {
   const q = state.q.trim().toLowerCase();
   let list = state.nfts.filter((n) => {
     if (state.holding && !holds(n)) return false;
+    if (traitsActive() && !matchesTraits(n)) return false;
     if (!q) return true;
     return toStr(n.tokenId).toLowerCase().includes(q) || toStr(n.wallet).toLowerCase().includes(q) || toStr(n.name).toLowerCase().includes(q);
   });
@@ -99,7 +136,7 @@ function showMore(total) {
   const b = $('more');
   b.hidden = total <= state.limit;
   b.textContent = `Show more (${Math.max(0, total - state.limit)} left)`;
-  $('reset').hidden = !(state.q || state.holding);
+  $('reset').hidden = !(state.q || state.holding || traitsActive());
 }
 const rerender = () => { state.limit = PAGE; renderGrid(); };
 
@@ -124,6 +161,7 @@ function visibleHolders() {
   const q = state.q.trim().toLowerCase();
   let list = buildHolders().filter((h) => {
     if (state.holding && !h.holding) return false;
+    if (traitsActive() && !h.nfts.some(matchesTraits)) return false;
     if (!q) return true;
     return h.owner.includes(q) || h.nfts.some((n) => toStr(n.tokenId).toLowerCase() === q || toStr(n.name).toLowerCase().includes(q) || toStr(n.wallet).toLowerCase().includes(q));
   });
@@ -326,15 +364,22 @@ function openPanel(n) {
   const head = el('tr', {}, [el('th', { text: 'Token' }), el('th', { cls: 'num', text: 'Quantity' }), el('th', { cls: 'num', text: 'USD' })]);
   table.append(el('thead', {}, [head]));
   const body = el('tbody');
+  let starred = false;
   const rows = [];
   if ((n.ethBalance || 0) > 0) rows.push({ symbol: 'ETH', name: 'Ether (native)', quantity: n.ethBalance, usd: n.ethUsd });
   rows.push(...(n.tokens || []));
   if (!rows.length) body.append(el('tr', {}, [el('td', { text: 'No tokens', attrs: { colspan: '3' } })]));
   for (const t of rows) {
-    const label = el('td', {}, [el('div', { text: toStr(t.symbol) || '?' }), el('div', { cls: 'muted', text: toStr(t.name) })]);
+    const sym = el('div', { text: toStr(t.symbol) || '?' });
+    if (isUncertain(t)) { starred = true; sym.append(' ', el('span', { cls: 'star', text: '★', attrs: { title: `OpenSea status: ${toStr(t.status)} — unverified, may be spam`, 'aria-label': 'unverified token' } })); }
+    const label = el('td', {}, [sym, el('div', { cls: 'muted', text: toStr(t.name) })]);
     body.append(el('tr', {}, [label, el('td', { cls: 'num', text: fmtNum(t.quantity, 6) }), el('td', { cls: 'num', text: fmtUsd(t.usd) })]));
   }
   table.append(body);
+  $('p-star-note').hidden = !starred;
+  const tc = $('p-traits');
+  tc.replaceChildren();
+  for (const [k, v] of Object.entries(n.traits || {})) tc.append(el('span', { cls: 'chip trait', text: `${k}: ${v}` }));
 
   const grid = $('p-nfts');
   grid.replaceChildren();
@@ -409,7 +454,9 @@ async function main() {
   $('sort').addEventListener('change', (e) => { state.sort = e.target.value; rerender(); });
   $('holding').addEventListener('change', (e) => { state.holding = e.target.checked; rerender(); });
   $('more').addEventListener('click', () => { state.limit += PAGE; renderGrid(); });
-  $('reset').addEventListener('click', () => { state.q = ''; state.holding = false; $('q').value = ''; $('holding').checked = false; rerender(); });
+  $('reset').addEventListener('click', () => { state.q = ''; state.holding = false; $('q').value = ''; $('holding').checked = false; clearTraits(); rerender(); });
+  $('traits-clear').addEventListener('click', () => { clearTraits(); rerender(); });
+  $('nostar').addEventListener('change', (e) => { state.noStar = e.target.checked; renderStats(); rerender(); });
 
   let data;
   try {
@@ -425,10 +472,10 @@ async function main() {
   state.data = data;
   state.nfts = Array.isArray(data?.nfts) ? data.nfts.filter((n) => n && typeof n === 'object') : [];
   const c = data?.collection || {};
-  if (c.name) { $('title').textContent = `${toStr(c.name)} — wallets`; document.title = `${toStr(c.name)} wallets`; }
   const t = new Date(data?.generatedAt);
-  $('updated').textContent = Number.isNaN(t.getTime()) ? 'Last updated: unknown' : `Last scan: ${ago(t)} (${t.toLocaleString()}). Press ↻ Refresh on any NFT for live data.`;
+  $('updated').textContent = Number.isNaN(t.getTime()) ? 'Last updated: unknown' : `Wallet browser · last scan ${ago(t)}`;
   renderStats();
+  buildTraitUI();
   if (!state.nfts.length) showEmpty('The data file contains no NFTs yet — check back soon.');
   renderGrid();
   const m = /^#(nft|holder)-(.+)$/.exec(location.hash);

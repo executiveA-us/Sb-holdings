@@ -77,7 +77,20 @@ export function parseListItem(it) {
     tokenId: String(id),
     name: pick(it, 'name', 'metadata.name') ?? null,
     image: pick(it, 'display_image_url', 'image_url', 'image', 'metadata.image') ?? null,
+    traits: traitMap(pick(it, 'traits', 'attributes')),
   };
+}
+
+/** {type: value} for display/filtering. Skips the wallet-address trait and empty values. */
+export function traitMap(raw) {
+  const out = {};
+  for (const t of normTraits(raw)) {
+    if (!t.name || t.value === null || t.value === undefined || t.value === '') continue;
+    const v = String(t.value);
+    if (ADDRESS_RE.test(v.trim())) continue;
+    out[t.name] = v;
+  }
+  return out;
 }
 
 export function parseSingleNft(body, forcedTrait) {
@@ -130,6 +143,7 @@ export function parseOpenSeaToken(it) {
     // Confirmed from the first run: OpenSea's `quantity` is already decimal-adjusted (e.g. "232.947…").
     quantity: formatted !== undefined ? Number(formatted) : Number(rawQty) || 0,
     usd: numOrNull(pick(it, 'usd_value', 'usd_price_total', 'value_usd', 'usd', 'fiat_value', 'usd_balance')),
+    status: pick(it, 'status') ?? null, // OpenSea's verdict, e.g. "OK"; anything else is shown with a star
     _usdUnit: numOrNull(pick(it, 'usd_price', 'price_usd', 'price.usd')),
   };
 }

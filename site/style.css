@@ -1,16 +1,16 @@
 :root {
   --bg: #f6f7f9; --card: #fff; --text: #14171c; --muted: #6a7280; --line: #e2e5ea;
-  --accent: #2f6df6; --chip: #eef1f6; --warn-bg: #fff6df; --warn-line: #f0d98a;
+  --accent: #f26b00; --chip: #eef1f6; --warn-bg: #fff6df; --warn-line: #f0d98a;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0e1013; --card: #171a1f; --text: #e9ecf1; --muted: #8e97a5; --line: #2a2f37;
-    --accent: #6c9bff; --chip: #232830; --warn-bg: #2b2412; --warn-line: #5b4b1b;
+    --accent: #ff8a1f; --chip: #232830; --warn-bg: #2b2412; --warn-line: #5b4b1b;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0e1013; --card: #171a1f; --text: #e9ecf1; --muted: #8e97a5; --line: #2a2f37;
-  --accent: #6c9bff; --chip: #232830; --warn-bg: #2b2412; --warn-line: #5b4b1b;
+  --accent: #ff8a1f; --chip: #232830; --warn-bg: #2b2412; --warn-line: #5b4b1b;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
@@ -70,3 +70,21 @@ a.card { text-decoration: none; }
 
 #panel { z-index: 12; }
 #p-back { margin-bottom: 8px; }
+
+/* ---- orange brand ---- */
+.hero { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 26px 16px 22px; background: #f77400 url(assets/banner.jpg) center / cover no-repeat; color: #111; }
+.hero .logo { width: 72px; height: 72px; border-radius: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+.hero h1 { margin: 10px 0 2px; font-size: clamp(1.5rem, 5vw, 2.2rem); letter-spacing: .01em; }
+.hero .sub { margin: 0; max-width: 60ch; font-size: .9rem; font-weight: 600; }
+.hero .theme { position: absolute; top: 10px; right: 10px; }
+.tab.active { color: #111; }
+.traits { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; margin: 8px 0; }
+.traits summary { cursor: pointer; font-weight: 600; }
+.traits-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin: 10px 0; }
+.traits-grid label { display: flex; flex-direction: column; font-size: .75rem; color: var(--muted); gap: 2px; }
+.traits-grid select { width: 100%; }
+.star { color: var(--accent); font-weight: 700; cursor: help; }
+.chip.trait { background: transparent; border: 1px solid var(--line); }
+.hero .sub { display: inline-block; background: rgba(247,116,0,.92); padding: 3px 12px; border-radius: 999px; }
+.star-legend { font-size: .9rem; margin: 0 0 14px; }
+.stat b { overflow-wrap: anywhere; font-size: clamp(1.05rem, 4.5vw, 1.3rem); }

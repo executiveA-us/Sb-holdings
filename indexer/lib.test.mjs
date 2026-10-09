@@ -33,3 +33,13 @@ test('opensea token quantity is already decimal-adjusted', () => {
   assert.equal(t.usd, 2.5);
   assert.equal(parseOpenSeaToken({ symbol: 'Y', decimals: 18, quantity: '232.94', usd_value: '1.04' }).quantity, 232.94);
 });
+
+import { traitMap, parseListItem } from './lib.mjs';
+test('traitMap drops wallet address trait and empties', () => {
+  const m = traitMap([{ trait_type: 'Eyes', value: 'Bull' }, { trait_type: 'Wallet', value: A }, { trait_type: 'X', value: null }]);
+  assert.deepEqual(m, { Eyes: 'Bull' });
+  assert.deepEqual(parseListItem({ identifier: '1', traits: [{ trait_type: 'Tie', value: 'Red' }] }).traits, { Tie: 'Red' });
+});
+test('token status kept', () => {
+  assert.equal(parseOpenSeaToken({ symbol: 'Z', quantity: '1', status: 'SUSPICIOUS' }).status, 'SUSPICIOUS');
+});

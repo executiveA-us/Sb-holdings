@@ -34,6 +34,10 @@ header. It is never logged or written to the site. All on-chain/metadata strings
 
 **Site-only changes:** run the workflow with *reuse_data* ticked to redeploy the site in about a minute using the currently published `wallets.json` (no indexing, no OpenSea calls).
 
+- **Traits:** each NFT's traits (the wallet-address trait is excluded) are shown on its panel and can be used in the **Filter by traits** box. Filters combine with search and apply to both the NFTs and Holders tabs.
+- **★ tokens:** any token whose OpenSea `status` isn't `OK` is starred and a notice at the top of the page says starred tokens aren't verified as safe. They still count toward USD unless "Don't count ★ tokens in USD" is ticked.
+- **Branding / sharing:** logo, banner and the social preview image (`og.jpg`, 1200×630) live in `site/assets/`. The Open Graph / Twitter tags in `site/index.html` use the absolute URL `https://executivea-us.github.io/Sb-holdings/`; update it if the repo is renamed.
+
 ## Setup
 
 1. Repo **Settings → Secrets and variables → Actions**: secret `OPENSEA_API_KEY` (already set).

@@ -3,22 +3,41 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src https: data:; connect-src 'self' https://robinhoodchain.blockscout.com; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self' https://robinhoodchain.blockscout.com; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<title>NFT Wallets</title>
+<title>Stonk Broker Holdings</title>
+<meta name="description" content="Browse every Stonk Broker NFT's wallet: ETH, tokens and NFTs held, and see who holds what.">
+<meta name="theme-color" content="#F77400">
+<link rel="icon" type="image/jpeg" href="assets/logo.jpg">
+<link rel="apple-touch-icon" href="assets/logo.jpg">
+<link rel="canonical" href="https://executivea-us.github.io/Sb-holdings/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Stonk Broker Holdings">
+<meta property="og:title" content="Stonk Broker Holdings">
+<meta property="og:description" content="Browse every Stonk Broker's wallet: ETH, tokens and NFTs held, and see who holds what.">
+<meta property="og:url" content="https://executivea-us.github.io/Sb-holdings/">
+<meta property="og:image" content="https://executivea-us.github.io/Sb-holdings/assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Stonk Broker Holdings: a black pixel briefcase on an orange background">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Stonk Broker Holdings">
+<meta name="twitter:description" content="Browse every Stonk Broker's wallet: ETH, tokens and NFTs held, and see who holds what.">
+<meta name="twitter:image" content="https://executivea-us.github.io/Sb-holdings/assets/og.jpg">
+<meta name="twitter:image:alt" content="Stonk Broker Holdings: a black pixel briefcase on an orange background">
 <link rel="stylesheet" href="style.css?v=__BUILD__">
 </head>
 <body>
-<header class="top">
-  <div>
-    <h1 id="title">NFT Wallets</h1>
-    <p class="muted" id="updated">Loading…</p>
-  </div>
-  <button id="theme" class="btn" type="button" aria-label="Toggle theme">◐</button>
+<header class="hero">
+  <button id="theme" class="btn theme" type="button" aria-label="Toggle light/dark theme">◐ Theme</button>
+  <img class="logo" src="assets/logo.jpg" alt="" width="72" height="72">
+  <h1 id="title">Stonk Broker Holdings</h1>
+  <p class="sub" id="updated">Loading…</p>
 </header>
 
 <main>
   <p class="intro" id="intro">Every Stonk Broker NFT has its own wallet. Browse the wallets and see what each one holds, or switch to <b>Holders</b> to see who owns which NFTs. The numbers are a snapshot from the last scan — open any NFT and press <b>↻ Refresh</b> to check its wallet live.</p>
+  <p class="notice warn star-legend" role="note"><span class="star">★</span> <b>A star next to a token means OpenSea has not verified it as safe.</b> It may be legitimate or it may be spam or a scam — never assume it's safe, and do your own checks before interacting with it.</p>
   <section class="stats" id="stats" aria-label="Summary"></section>
 
   <nav class="tabs" aria-label="View">
@@ -35,8 +54,15 @@
       <option value="nfts">Sort: NFT count</option>
     </select>
     <label class="check"><input id="holding" type="checkbox"> Only wallets holding something</label>
+    <label class="check"><input id="nostar" type="checkbox"> Don't count ★ tokens in USD</label>
     <button id="reset" class="btn" type="button" hidden>Clear filters</button>
   </section>
+
+  <details class="traits" id="traits-box" hidden>
+    <summary id="traits-sum">Filter by traits</summary>
+    <div id="traits-grid" class="traits-grid"></div>
+    <button id="traits-clear" class="btn" type="button">Clear traits</button>
+  </details>
 
   <p class="muted" id="count"></p>
   <div id="empty" class="notice" hidden></div>
@@ -63,8 +89,10 @@
       <span class="muted" id="p-refresh-status" role="status"></span>
     </div>
     <p class="notice warn">Anyone can send items to these wallets. Names and metadata below come from third parties and are unverified — treat unfamiliar tokens and NFTs with caution.</p>
+    <div class="chips" id="p-traits"></div>
     <h3>Token balances</h3>
     <div class="table-wrap"><table id="p-tokens"></table></div>
+    <p class="muted" id="p-star-note" hidden>★ OpenSea doesn't mark this token as verified. It may be legitimate or spam, so check it yourself.</p>
     <h3>NFTs held <span class="muted" id="p-nft-count"></span></h3>
     <div class="grid small" id="p-nfts"></div>
   </div>

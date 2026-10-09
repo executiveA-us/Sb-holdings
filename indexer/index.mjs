@@ -340,6 +340,7 @@ async function main() {
       tokenId: n.tokenId,
       name: n.name,
       image: n.image,
+      traits: n.traits ?? {},
       owner: c.owner ?? null,
       wallet: c.wallet ?? null,
       ethBalance: r?.ethBalance ?? 0,
