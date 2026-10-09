@@ -26,3 +26,10 @@ test('blockscout tokens', () => {
   assert.equal(r.length, 1);
   assert.equal(r[0].usd, 6);
 });
+import { parseOpenSeaToken } from './lib.mjs';
+test('opensea token quantity is already decimal-adjusted', () => {
+  const t = parseOpenSeaToken({ address: A, symbol: 'X', name: 'X', decimals: 18, quantity: '5', usd_value: '2.5' });
+  assert.equal(t.quantity, 5);
+  assert.equal(t.usd, 2.5);
+  assert.equal(parseOpenSeaToken({ symbol: 'Y', decimals: 18, quantity: '232.94', usd_value: '1.04' }).quantity, 232.94);
+});

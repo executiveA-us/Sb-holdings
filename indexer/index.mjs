@@ -35,6 +35,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const timeLeft = () => MAX_RUNTIME_MS - (Date.now() - START);
 
 // ---- HTTP: spaced requests, retry/backoff on 429/5xx ----
+const diagLogged = new Set();
 let nextSlot = 0;
 let retryCount = 0;
 let gapMs = Number(env('MIN_GAP_MS', '400'));
@@ -51,7 +52,7 @@ class HttpError extends Error {
 }
 
 async function getJson(url, { opensea = false, retries = 6 } = {}) {
-  const headers = { accept: 'application/json' };
+  const headers = { accept: 'application/json', 'user-agent': 'Mozilla/5.0 (compatible; sb-holdings-indexer/1.0; +https://github.com/executiveA-us/Sb-holdings)' };
   if (opensea) headers['x-api-key'] = API_KEY;
   const safeUrl = url.replace(/^https:\/\/[^/]+/, '');
   for (let attempt = 0; ; attempt++) {
@@ -78,6 +79,11 @@ async function getJson(url, { opensea = false, retries = 6 } = {}) {
       }
       await sleep(wait);
       continue;
+    }
+    if (!opensea && !diagLogged.has(res.status)) {
+      diagLogged.add(res.status);
+      const snippet = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
+      console.warn(`  [diag] non-OpenSea HTTP ${res.status} for ${safeUrl.split('?')[0]} — body: ${snippet}`);
     }
     throw new HttpError(res.status, safeUrl);
   }
@@ -142,6 +148,18 @@ async function fetchSingle(tokenId) {
 }
 
 // ---- per-wallet scanning ----
+const RPC_URL = env('RPC_URL', '');
+async function rpcBalance(wallet) {
+  if (!RPC_URL) return null;
+  const res = await fetch(RPC_URL, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [wallet, 'latest'] }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const j = await res.json();
+  return j?.result ? Number(BigInt(j.result)) / 1e18 : null;
+}
+
 let tokensEndpointFailures = 0;
 
 async function paged(urlBase, cursorParam, label, itemKeys, parse) {
@@ -181,7 +199,12 @@ async function scanWallet(wallet) {
     r.ethBalance = p.eth; ethRate = p.rate;
   } catch (e) {
     // Unknown/never-used addresses 404 on Blockscout: treat as empty.
-    if (e.status === 404) r.ethBalance = 0; else r.errors.push(`eth: ${e.message}`);
+    if (e.status === 404) r.ethBalance = 0;
+    else {
+      const rpc = await rpcBalance(wallet).catch(() => null);
+      if (rpc !== null) r.ethBalance = rpc; else r.errors.push(`eth: ${e.message}`);
+      r.ethFromBlockscoutFailed = rpc === null;
+    }
   }
 
   // Token balances: OpenSea first, Blockscout fallback
@@ -210,7 +233,17 @@ async function scanWallet(wallet) {
     }
   }
 
-  // Native ETH as USD value row is left to the UI; keep rate for stats.
+  // If Blockscout/RPC failed, OpenSea may list native ETH among the tokens: use it for the balance.
+  if (r.ethFromBlockscoutFailed) {
+    const i = r.tokens.findIndex((t) => (!t.address || /^0x0{40}$/i.test(t.address)) && /^eth$/i.test(t.symbol || ''));
+    if (i >= 0) {
+      const [native] = r.tokens.splice(i, 1);
+      r.ethBalance = native.quantity; ethRate = native.usd !== null && native.quantity ? native.usd / native.quantity : null;
+      r.errors = r.errors.filter((m) => !m.startsWith('eth:'));
+    }
+  }
+  delete r.ethFromBlockscoutFailed;
+
   r.ethUsd = ethRate !== null ? r.ethBalance * ethRate : null;
   return r;
 }
@@ -280,6 +313,27 @@ async function main() {
     scanned++;
     if (scanned % 25 === 0) console.log(`  wallets scanned: ${scanned}/${wallets.length}`);
   });
+
+  // Retry wallets that hit rate limits, after a cooldown
+  const needsRetry = () => wallets.filter((w) => {
+    const r = results.get(w);
+    return r && (r.source === 'none' || r.errors.some((m) => /HTTP (429|5\d\d)|network/.test(m) && !m.startsWith('eth')));
+  });
+  for (let pass = 1; pass <= 2 && !TRAITS_ONLY; pass++) {
+    const list = needsRetry();
+    if (!list.length || timeLeft() < 5 * 60_000) break;
+    console.log(`Retry pass ${pass}: ${list.length} wallets after cooldown`);
+    await sleep(30_000);
+    await pool(list, async (w) => {
+      if (timeLeft() < 60_000) return;
+      try {
+        const fresh = await scanWallet(w);
+        const old = results.get(w);
+        const bad = (x) => (x.source === 'none' ? 1 : 0) + x.errors.filter((m) => !m.startsWith('eth')).length;
+        if (bad(fresh) <= bad(old)) results.set(w, fresh);
+      } catch { /* keep old */ }
+    }, 2);
+  }
 
   // Collection name (best effort)
   let collectionName = null;

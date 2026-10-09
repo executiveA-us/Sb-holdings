@@ -127,7 +127,8 @@ export function parseOpenSeaToken(it) {
     name: pick(t, 'name') ?? pick(it, 'name') ?? null,
     address: pick(t, 'address', 'contract_address', 'contract') ?? pick(it, 'address') ?? null,
     decimals,
-    quantity: formatted !== undefined ? Number(formatted) : scaleUnits(rawQty, decimals),
+    // Confirmed from the first run: OpenSea's `quantity` is already decimal-adjusted (e.g. "232.947…").
+    quantity: formatted !== undefined ? Number(formatted) : Number(rawQty) || 0,
     usd: numOrNull(pick(it, 'usd_value', 'usd_price_total', 'value_usd', 'usd', 'fiat_value', 'usd_balance')),
     _usdUnit: numOrNull(pick(it, 'usd_price', 'price_usd', 'price.usd')),
   };
