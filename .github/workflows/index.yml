@@ -78,6 +78,9 @@ jobs:
           path: .cache/wallet-map.json
           key: wallet-map-${{ github.run_id }}
 
+      - name: Stamp build id (cache-busts app.js / style.css)
+        run: sed -i "s/__BUILD__/${GITHUB_SHA::7}-${GITHUB_RUN_ID}/g" site/index.html
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
