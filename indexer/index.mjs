@@ -37,10 +37,12 @@ const timeLeft = () => MAX_RUNTIME_MS - (Date.now() - START);
 // ---- HTTP: spaced requests, retry/backoff on 429/5xx ----
 let nextSlot = 0;
 let retryCount = 0;
-async function gate(minGapMs) {
+let gapMs = Number(env('MIN_GAP_MS', '400'));
+const BASE_GAP_MS = gapMs;
+async function gate() {
   const now = Date.now();
   const at = Math.max(now, nextSlot);
-  nextSlot = at + minGapMs;
+  nextSlot = at + gapMs;
   if (at > now) await sleep(at - now);
 }
 
@@ -53,7 +55,7 @@ async function getJson(url, { opensea = false, retries = 6 } = {}) {
   if (opensea) headers['x-api-key'] = API_KEY;
   const safeUrl = url.replace(/^https:\/\/[^/]+/, '');
   for (let attempt = 0; ; attempt++) {
-    if (opensea) await gate(Number(env('MIN_GAP_MS', '400')));
+    if (opensea) await gate();
     let res;
     try {
       res = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
@@ -62,13 +64,17 @@ async function getJson(url, { opensea = false, retries = 6 } = {}) {
       await sleep(backoff(attempt));
       continue;
     }
-    if (res.ok) return res.json();
+    if (res.ok) {
+      if (opensea && gapMs > BASE_GAP_MS) gapMs = Math.max(BASE_GAP_MS, gapMs * 0.98); // slowly speed back up
+      return res.json();
+    }
+    if (opensea && res.status === 429) gapMs = Math.min(2000, gapMs * 1.25); // adaptive slow-down
     if ((res.status === 429 || res.status >= 500) && attempt < retries) {
       const ra = Number(res.headers.get('retry-after'));
-      const wait = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 60_000) : backoff(attempt);
+      const wait = Math.max(Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 60_000) : 0, backoff(attempt));
       retryCount++;
       if (retryCount <= 5 || retryCount % 25 === 0) {
-        console.warn(`  [retry #${retryCount}] HTTP ${res.status} on ${safeUrl.split('?')[0]} — waiting ${Math.round(wait / 1000)}s (attempt ${attempt + 1}/${retries})`);
+        console.warn(`  [retry #${retryCount}] HTTP ${res.status} on ${safeUrl.split('?')[0]} — waiting ${Math.round(wait / 1000)}s, gap now ${Math.round(gapMs)}ms (attempt ${attempt + 1}/${retries})`);
       }
       await sleep(wait);
       continue;
